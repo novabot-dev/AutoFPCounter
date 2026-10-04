@@ -4,6 +4,39 @@
 
 Initial release.
 
+### Pause menu controls
+
+- **FP** button on the pause menu opens the control popup.
+- **Frames** button inside the popup opens the per-click list.
+- Speed grid of 18 presets: 1x 2x 3x 4x 6x 8x 12x 16x 24x 32x 48x 64x 73x 96x
+  128x 150x 183x 200x. The selected preset is drawn at full opacity.
+- The status line reports the **requested** and **achieved** rate separately,
+  because the per-frame tick ceiling caps what is reachable: at 60 FPS rendering
+  the ceiling allows 16 x 60 = 960 ticks per real second, i.e. 4x the 240 TPS
+  baseline. Anything above 4x is requested but not reachable, so a 73x request
+  reads `73.0x req / 3.9x act`.
+- Click offset in whole ticks, +/-12, nudged from the popup and clamped to the
+  window search radius. Applied to injected playback clicks only; the recorder
+  never shifts, so a capture always records what actually happened.
+
+### Frame window overrides
+
+- Per-click log of every classified click, 1024 entries, cleared per attempt.
+  Previously a click was counted into a bucket and discarded, so there was
+  nothing to display or correct.
+- The FRAMES list shows one row per click: sequence number, the window the
+  tracker measured, its FPS ceiling label, and a text field to override it.
+- An override re-evaluates against the state captured **at the click**, not the
+  state at the moment of typing, so the 60 FPS override still sees the original
+  tick, time warp and boundary kind.
+- The original measurement is always shown next to a corrected one (`measured N`)
+  so an override can never hide the evidence it replaces.
+- Overrides feed back into the aggregate tallies, which are rebuilt from the log
+  rather than decremented, so the corner counters cannot drift from the list.
+- One shared text field for the whole list rather than one per row: a full attempt
+  can hold 1024 clicks, and 1024 live cocos2d text nodes with their own touch
+  delegates would cost more frame time than the physics they are measuring.
+
 ### Ingestion
 
 - Decoders for Silicate binary, XDBot text, xBot 2.1 text, Mega Hack replay

@@ -502,8 +502,11 @@ void GameSession::startPlayback() {
     if (!m_playback.isLoaded()) return;
     m_desyncReported = false;
     m_playback.restart();
-    m_playback.setSpeed(m_settings.accelerated ? PlaybackSpeed::Accelerated
-                                               : PlaybackSpeed::Normal);
+    // Same rule as beginAttempt: the preset the user picked on the speed grid wins
+    // over the mod.json toggle, so starting playback does not silently revert a
+    // 73x choice back to the 4x default.
+    m_playback.setSpeed(m_playback.rate() > 1.0 ? PlaybackSpeed::Accelerated
+                                                : PlaybackSpeed::Normal);
     m_playback.start();
 }
 
