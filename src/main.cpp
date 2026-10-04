@@ -1,11 +1,11 @@
 #include <Geode/Geode.hpp>
 
 #include <Geode/binding/ButtonSprite.hpp>
-#include <Geode/binding/CCMenu.hpp>
 #include <Geode/binding/CCMenuItemSpriteExtra.hpp>
 #include <Geode/binding/GJBaseGameLayer.hpp>
 #include <Geode/binding/GJGameLevel.hpp>
 #include <Geode/binding/PlayLayer.hpp>
+#include <Geode/cocos/menu_nodes/CCMenu.h>
 #include <Geode/loader/Mod.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayLayer.hpp>

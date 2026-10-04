@@ -7,9 +7,9 @@
 
 #include <Geode/Geode.hpp>
 #include <Geode/binding/ButtonSprite.hpp>
-#include <Geode/binding/CCLabelBMFont.hpp>
-#include <Geode/binding/CCMenu.hpp>
 #include <Geode/binding/CCMenuItemSpriteExtra.hpp>
+#include <Geode/cocos/label_nodes/CCLabelBMFont.h>
+#include <Geode/cocos/menu_nodes/CCMenu.h>
 #include <Geode/loader/Mod.hpp>
 
 #include "../game/GameSession.hpp"
