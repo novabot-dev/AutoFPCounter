@@ -33,6 +33,11 @@ namespace afpc {
 // ever touched from the game's main thread.
 // ---------------------------------------------------------------------------
 class FpPopup : public geode::Popup {
+public:
+    // Geode 5's Popup is a plain base class rather than a CRTP template, so the
+    // factory is spelled out here instead of being inherited.
+    static FpPopup* create();
+
 protected:
     // Popup::init is protected and not virtual, so it is wrapped here rather than
     // overridden, then the static factory calls this.

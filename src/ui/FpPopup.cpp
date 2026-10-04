@@ -14,6 +14,13 @@
 
 #include "../game/GameSession.hpp"
 
+// cocos2d classes are namespaced and Geode's own types live in `geode`. This file
+// deliberately does not pull in geode::prelude, so the handful of names used
+// below are imported explicitly instead.
+using cocos2d::CCLabelBMFont;
+using cocos2d::CCMenu;
+using geode::Anchor;
+
 namespace afpc {
 
 namespace {
@@ -66,6 +73,16 @@ std::filesystem::path FpPopup::macrosDir() {
     return mod->getSaveDir() / "macros";
 }
 
+FpPopup* FpPopup::create() {
+    auto* ret = new FpPopup();
+    if (ret->initAnchored(340.f, 300.f)) {
+        ret->autorelease();
+        return ret;
+    }
+    delete ret;
+    return nullptr;
+}
+
 bool FpPopup::initAnchored(float width, float height) {
     if (!Popup::init(width, height, "GJ_square01.png")) return false;
 
@@ -92,27 +109,26 @@ bool FpPopup::initAnchored(float width, float height) {
     menu->setID("novabot.autofpcount/menu");
     m_mainLayer->addChildAtPosition(menu, Anchor::Center);
 
-    struct Row {
-        const char* caption;
-        void (FpPopup::*handler)(CCObject*);
-        float x;
-        float y;
-    };
-
-    const Row rows[] = {
-        {"Previous", &FpPopup::onPrevious, -74.f, 62.f},
-        {"Next", &FpPopup::onNext, 74.f, 62.f},
-        {"Reload", &FpPopup::onReload, 0.f, 12.f},
-        {"Accelerated", &FpPopup::onAccelerated, 0.f, -44.f},
-        {"Export", &FpPopup::onExport, 0.f, -100.f},
-    };
-
-    for (const Row& row : rows) {
+    // A table of {caption, handler} pairs cannot be built here: menu_selector
+    // converts a *member pointer of FpPopup* into a SEL_MenuHandler (a member
+    // pointer of CCObject), which is only a valid implicit conversion at the
+    // point where the handler is named. A local helper keeps that conversion
+    // in scope without naming SEL_MenuHandler, which is not in the public
+    // headers this file includes.
+    auto addButton = [this, menu](const char* caption,
+                                  void (FpPopup::*handler)(CCObject*),
+                                  float x, float y) {
         auto* item = CCMenuItemSpriteExtra::create(
-            ButtonSprite::create(row.caption), this, menu_selector(row.handler));
+            ButtonSprite::create(caption), this, menu_selector(handler));
         menu->addChild(item);
-        item->setPosition(row.x, row.y);
-    }
+        item->setPosition(x, y);
+    };
+
+    addButton("Previous", &FpPopup::onPrevious, -74.f, 62.f);
+    addButton("Next", &FpPopup::onNext, 74.f, 62.f);
+    addButton("Reload", &FpPopup::onReload, 0.f, 12.f);
+    addButton("Accelerated", &FpPopup::onAccelerated, 0.f, -44.f);
+    addButton("Export", &FpPopup::onExport, 0.f, -100.f);
 
     refreshStatus();
     return true;
