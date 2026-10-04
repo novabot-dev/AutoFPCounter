@@ -1,0 +1,32 @@
+# Build output
+build/
+cmake-build-*/
+out/
+
+# Geode mod build artifacts
+*.dll
+*.dylib
+*.so
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.o
+*.obj
+
+# Visual Studio / Xcode
+.vs/
+.vscode/
+.idea/
+*.xcodeproj/
+*.xcworkspace/
+
+# Captured macros and recordings are user data, not source
+captures/
+macros/
+*.macro
+*.slc
+
+# OS noise
+Thumbs.db
+.DS_Store

@@ -1,0 +1,64 @@
+{
+	"geode": "5.10.1",
+	"gd": {
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081"
+	},
+	"id": "novabot.autofpcount",
+	"name": "AutoFPCount",
+	"version": "v1.0.0",
+	"developer": "novabot",
+	"description": "Frame-window analyser and macro recorder/playback overlay for Geometry Dash. Decodes Silicate, XDBot, Mega Hack and Eclipse macro files, enforces a strict 240 TPS ingestion gate, and draws per-click frame-window circles with their equivalent frame-rate ceiling plus a live 'Frame Window: Count' statistics list.",
+	"links": {
+		"source": "https://github.com/novabot-dev/AutoFPCount"
+	},
+	"tags": [
+		"gameplay",
+		"utility"
+	],
+	"settings": {
+		"enable-overlay": {
+			"type": "boolean",
+			"default": true,
+			"name": "Enable Overlay",
+			"description": "Draw the per-click window circles, frame-rate labels and the corner statistics list."
+		},
+		"enable-recorder": {
+			"type": "boolean",
+			"default": true,
+			"name": "Enable Recorder",
+			"description": "Capture raw click/release input while the attempt is running so it can be exported as a 240 FPS macro."
+		},
+		"reject-non-240": {
+			"type": "boolean",
+			"default": true,
+			"name": "Strict 240 FPS Gate",
+			"description": "Refuse to ingest any macro file whose declared tick rate is not exactly 240 FPS."
+		},
+		"force-60-override": {
+			"type": "boolean",
+			"default": true,
+			"name": "60 FPS Window Override",
+			"description": "Relabel a 5-8 frame window as '60 FPS' when the press landed on the 60 Hz tick grid (tick % 4 == 0), the nearest interaction boundary was a ground or slope transition, time warp is exactly 1.0, and playback is at normal speed. A display heuristic only: the bucket in the statistics list is not changed."
+		},
+		"enable-accelerated": {
+			"type": "boolean",
+			"default": false,
+			"name": "Accelerated Timescale",
+			"description": "EXPERIMENTAL. Drives extra logic ticks per rendered frame during playback. Bounded by a hard step cap; refuses to run rather than silently dropping steps."
+		},
+		"show-boundary-dots": {
+			"type": "boolean",
+			"default": true,
+			"name": "Show Interaction Boundaries",
+			"description": "Draw a small dot on each rendered frame at the player's position when the collision/interaction state changed on that frame's last tick. These are the ticks the window search measures against."
+		},
+		"auto-start-playback": {
+			"type": "boolean",
+			"default": true,
+			"name": "Auto Start Playback",
+			"description": "Begin replaying the ingested macro automatically at the start of each attempt. Disable this if you only want the window analysis on live input."
+		}
+	}
+}
