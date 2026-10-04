@@ -78,7 +78,15 @@ ccColor3B rgb(unsigned char r, unsigned char g, unsigned char b) {
     return color;
 }
 
-void setNodeOpacity(cocos2d::CCNode* node, unsigned char alpha) noexcept {
+// CCNode itself carries no opacity setter - setOpacity lives on CCNodeRGBA (the
+// base of CCDrawNode) and is re-declared directly on CCLabelBMFont, which instead
+// implements CCRGBAProtocol. There is no shared base that exposes it, so both
+// concrete shapes are offered and overload resolution picks per call site.
+void setNodeOpacity(cocos2d::CCNodeRGBA* node, unsigned char alpha) noexcept {
+    if (node != nullptr) node->setOpacity(alpha);
+}
+
+void setNodeOpacity(cocos2d::CCLabelBMFont* node, unsigned char alpha) noexcept {
     if (node != nullptr) node->setOpacity(alpha);
 }
 

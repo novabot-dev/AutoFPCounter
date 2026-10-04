@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 
+#include <Geode/cocos/base_nodes/CCNode.h>
 #include <Geode/cocos/draw_nodes/CCDrawNode.h>
 #include <Geode/cocos/label_nodes/CCLabelBMFont.h>
 
@@ -21,6 +22,7 @@ using cocos2d::CCDirector;
 using cocos2d::CCDrawNode;
 using cocos2d::CCLabelBMFont;
 using cocos2d::CCNode;
+using cocos2d::CCNodeRGBA;
 using cocos2d::CCPoint;
 using cocos2d::CCSize;
 using cocos2d::ccColor3B;

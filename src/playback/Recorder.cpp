@@ -157,7 +157,7 @@ std::filesystem::path Recorder::defaultExportPath() {
     // Mod::get() is only null if the export is somehow reached before the mod is
     // loaded. "." is used rather than temp_directory_path() because the latter can
     // throw, and a convenience path helper should never do that.
-    Mod* mod = Mod::get();
+    geode::Mod* mod = geode::Mod::get();
     const std::filesystem::path base =
         mod != nullptr ? mod->getSaveDir() : std::filesystem::path{"."};
     return base / "captures" / "capture.macro";
