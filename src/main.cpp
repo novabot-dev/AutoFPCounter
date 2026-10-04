@@ -1,14 +1,19 @@
 #include <Geode/Geode.hpp>
 
+#include <Geode/binding/ButtonSprite.hpp>
+#include <Geode/binding/CCMenu.hpp>
+#include <Geode/binding/CCMenuItemSpriteExtra.hpp>
 #include <Geode/binding/GJBaseGameLayer.hpp>
 #include <Geode/binding/GJGameLevel.hpp>
 #include <Geode/binding/PlayLayer.hpp>
 #include <Geode/loader/Mod.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayLayer.hpp>
+#include <Geode/modify/PauseLayer.hpp>
 
 #include "core/Constants.hpp"
 #include "game/GameSession.hpp"
+#include "ui/FpPopup.hpp"
 
 using namespace geode::prelude;
 using namespace afpc;
@@ -142,5 +147,45 @@ class $modify(GJBaseGameLayer) {
         if (layer != nullptr) {
             GameSession::get().onRawButton(layer, down, button, isPlayer1);
         }
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Pause menu entry point.
+//
+// A single "FP" squircle appended to the pause menu's button column, which opens
+// the control popup. customSetup() is used rather than init() because the menu
+// this button is added to does not exist until after the engine's own setup has
+// run.
+//
+// The two-argument $modify form is required here, unlike the two hooks above: the
+// one-argument form produces an anonymous class, and menu_selector() needs a
+// nameable class to take the address of an incoming handler.
+// ---------------------------------------------------------------------------
+class $modify(FpPauseHook, PauseLayer) {
+    $override
+    void customSetup() {
+        PauseLayer::customSetup();
+
+        auto* menu = static_cast<CCMenu*>(this->getChildByID("right-button-menu"));
+        if (menu == nullptr) return;
+
+        // customSetup can run again on a re-created layer; never stack buttons.
+        if (menu->getChildByID("novabot.autofpcount/fp-button") != nullptr) return;
+
+        auto* button = CCMenuItemSpriteExtra::create(
+            ButtonSprite::create("FP"),
+            this,
+            menu_selector(FpPauseHook::onFpPressed)
+        );
+        button->setID("novabot.autofpcount/fp-button");
+        menu->addChild(button);
+
+        // Let the engine re-space the column now that it has one more child.
+        menu->updateLayout();
+    }
+
+    void onFpPressed(CCObject*) {
+        if (auto* popup = FpPopup::create()) popup->show();
     }
 };
