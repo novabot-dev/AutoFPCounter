@@ -13,6 +13,19 @@
 // InteractionTracker.hpp for why this declaration must not move inside `afpc`.
 class PlayLayer;
 
+// The cocos2d classes are the opposite case: they live in `namespace cocos2d`,
+// not globally. Geode's own headers do not re-export them at global scope, so the
+// exact names used below are pulled in explicitly rather than with a blanket
+// `using namespace`, which would risk ambiguities against the Geode bindings.
+using cocos2d::CCDirector;
+using cocos2d::CCDrawNode;
+using cocos2d::CCLabelBMFont;
+using cocos2d::CCNode;
+using cocos2d::CCPoint;
+using cocos2d::CCSize;
+using cocos2d::ccColor3B;
+using cocos2d::ccColor4F;
+
 namespace afpc {
 
 // ---------------------------------------------------------------------------

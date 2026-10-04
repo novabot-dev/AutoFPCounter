@@ -139,7 +139,7 @@ private:
 
     std::string out = std::to_string(whole);
     out += '.';
-    out += static<char>('0' + frac);
+    out += static_cast<char>('0' + frac);
     out += " FPS";
     return out;
 }

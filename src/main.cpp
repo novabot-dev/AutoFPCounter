@@ -38,7 +38,7 @@ bool checkGDR(bool isGeode) {
 // Inputs are queued before the engine consumes its input queue, so a press lands
 // on the tick it was recorded for rather than one tick late.
 // ---------------------------------------------------------------------------
-class $modify(PlayLayer, PlayLayer) {
+class $modify(PlayLayer) {
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
 
@@ -131,7 +131,7 @@ class $modify(PlayLayer, PlayLayer) {
 // This hook lives on the base class because handleButton is not overridden by
 // PlayLayer, so one hook covers every gameplay layer.
 // ---------------------------------------------------------------------------
-class $modify(GJBaseGameLayer, GJBaseGameLayer) {
+class $modify(GJBaseGameLayer) {
     void handleButton(bool down, int button, bool isPlayer1) {
         GJBaseGameLayer::handleButton(down, button, isPlayer1);
 

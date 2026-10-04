@@ -34,7 +34,11 @@ bool settingEnabled(const char* key, bool fallback) {
     // that window the caller's default is the correct answer.
     Mod* mod = Mod::get();
     if (mod == nullptr) return fallback;
-    return mod->getSettingEnabled(key);
+    // getSettingValue<T> yields a value-initialised T() for an unknown key, so a
+    // missing key would silently read as `false`. Check first and keep the
+    // caller's default in that case.
+    if (!mod->hasSetting(key)) return fallback;
+    return mod->getSettingValue<bool>(key);
 }
 
 } // namespace
@@ -205,7 +209,7 @@ void GameSession::postFrame(PlayLayer* layer, float dt) {
     // sampling the newest one.
     if (m_settings.boundaryDots) {
         const int found = m_tracker.boundariesAfter(
-            m_lastDrawnBoundary, m_boundaryScratch, Overlay::kMaxBoundaryDots);
+            m_lastDrawnBoundary, m_boundaryScratch.data(), Overlay::kMaxBoundaryDots);
         for (int i = 0; i < found; ++i) {
             m_overlay.addBoundaryMarker(m_boundaryScratch[i].x, m_boundaryScratch[i].y);
         }
@@ -308,7 +312,7 @@ WindowContext GameSession::buildContext(PlayLayer* layer, const PendingClick& cl
     return ctx;
 }
 
-void GameSession::drainPendingClicks(PlayLayer* layer) {
+void GameSession::drainPendingClicks(PlayLayer* layer) noexcept {
     if (m_pendingCount <= 0) return;
 
     for (int i = 0; i < m_pendingCount; ++i) {
