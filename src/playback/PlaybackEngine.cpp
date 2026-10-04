@@ -60,7 +60,21 @@ void PlaybackEngine::restart() noexcept {
     m_desynced = false;
     m_desyncReason = "";
     m_clock.reset();
+    m_effectiveRate = 0.0;
     m_running = true;
+}
+
+void PlaybackEngine::setRate(double rate) noexcept {
+    // Guarded rather than clamped to a range: anything non-finite would poison
+    // the fixed clock, so fall back to the vanilla cadence instead.
+    if (!(rate >= 1.0) || rate > 1e6) return;
+    m_rate = rate;
+}
+
+void PlaybackEngine::setClickOffset(int ticks) noexcept {
+    if (ticks > kMaxClickOffsetTicks) ticks = kMaxClickOffsetTicks;
+    if (ticks < -kMaxClickOffsetTicks) ticks = -kMaxClickOffsetTicks;
+    m_clickOffset = ticks;
 }
 
 void PlaybackEngine::setSpeed(PlaybackSpeed speed) noexcept {
@@ -73,11 +87,31 @@ void PlaybackEngine::setSpeed(PlaybackSpeed speed) noexcept {
 
 int PlaybackEngine::accumulateExtraTicks(float dt) noexcept {
     if (m_speed != PlaybackSpeed::Accelerated) return 0;
-    // kAcceleratedSpeed is the requested timescale; kMaxStepsPerFrame is the
-    // per-frame ceiling. In practice the ceiling binds first (16 ticks * 60 fps
+
+    // m_rate is the requested timescale; kMaxStepsPerFrame is the per-frame
+    // ceiling. In practice the ceiling binds first (16 ticks * 60 fps
     // = 960 ticks/s = 4x), and FixedClock keeps whatever it could not drain so
     // the cap delays work instead of discarding it.
-    return m_clock.accumulate(static_cast<double>(dt), kAcceleratedSpeed, kMaxStepsPerFrame);
+    const int due = m_clock.accumulate(static_cast<double>(dt), m_rate, kMaxStepsPerFrame);
+
+    // Measured from what actually came out, not from what was requested. The
+    // frame's own tick is not counted: this is *extra* ticks on top of the
+    // baseline the engine already ran, so the extra ticks are divided by the
+    // baseline ticks the same real interval would have produced on its own.
+    // At 60 FPS that baseline is kBaseTps/60 = 4 ticks, so 16 extra ticks read
+    // back as 16/4 = 4x.
+    const double seconds = static_cast<double>(dt);
+    if (seconds > 0.0 && due > 0) {
+        const double baseline = kBaseTpsD * seconds;
+        const double instantaneous = static_cast<double>(due) / baseline;
+        // Smoothed so a single frame in which the ceiling bound does not make the
+        // readout flicker between neighbouring values.
+        m_effectiveRate = m_effectiveRate > 0.0
+                              ? m_effectiveRate + (instantaneous - m_effectiveRate) * kRateSmoothingAlpha
+                              : instantaneous;
+    }
+
+    return due;
 }
 
 void PlaybackEngine::latchDesync(const char* reason) noexcept {
@@ -144,9 +178,18 @@ void PlaybackEngine::preTick(GJBaseGameLayer* layer, std::uint64_t engineTick) n
     // Several inputs may share one frame (a press and a release recorded inside
     // the same tick). They are all delivered in order before physics consumes
     // the queue, so ordering is preserved exactly.
+    //
+    // The click offset is applied here, at the moment of delivery, rather than by
+    // rewriting the macro on load: the recorded vector stays pristine, and the
+    // shift is visible to the caller through clickOffset(). `due` is computed in
+    // signed arithmetic and floored at zero, so a click pushed back before the
+    // start of the attempt fires on tick 0 instead of silently never firing.
+    std::int64_t due = static_cast<std::int64_t>(relative) - m_clickOffset;
+    if (due < 0) due = 0;
+
     while (m_cursor < m_macro.inputs.size()) {
         const MacroInput& input = m_macro.inputs[m_cursor];
-        if (static_cast<std::uint64_t>(input.tick) > relative) break;
+        if (static_cast<std::int64_t>(input.tick) > due) break;
         ++m_cursor;
         if (!deliverOne(layer, input)) return;
     }

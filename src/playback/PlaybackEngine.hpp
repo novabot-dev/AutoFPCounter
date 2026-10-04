@@ -54,6 +54,27 @@ public:
     void setSpeed(PlaybackSpeed speed) noexcept;
     [[nodiscard]] PlaybackSpeed speed() const noexcept { return m_speed; }
 
+    // Requested timescale. Only consulted in Accelerated mode - Normal is
+    // inherently kNormalRate. Values above what the per-frame tick ceiling can
+    // deliver are requested honestly but are not reachable, which is why
+    // effectiveRate() exists and is what the UI shows.
+    void setRate(double rate) noexcept;
+    [[nodiscard]] double rate() const noexcept { return m_rate; }
+
+    // Realised timescale, measured from ticks actually driven rather than from
+    // what was asked for. Tracks rate() only while the per-frame ceiling is not
+    // the binding constraint. Reset by start().
+    [[nodiscard]] double effectiveRate() const noexcept { return m_effectiveRate; }
+    void resetRateMeasurement() noexcept { m_effectiveRate = 0.0; }
+
+    // Whole-tick shift applied to every injected click: positive delays, negative
+    // advances. Clamped to +/- kMaxClickOffsetTicks.
+    //
+    // Playback only. The recorder never shifts, so a capture always records what
+    // actually happened rather than what the user was previewing.
+    void setClickOffset(int ticks) noexcept;
+    [[nodiscard]] int clickOffset() const noexcept { return m_clickOffset; }
+
     // Arm / disarm input delivery. Disarmed while the attempt is paused, the
     // player is dead, or the level has not started. The tick index keeps
     // advancing while disarmed, so a pause cannot desynchronise the macro.
@@ -107,6 +128,9 @@ private:
     bool m_hasAnchor = false;
 
     PlaybackSpeed m_speed = PlaybackSpeed::Off;
+    double m_rate = kNormalRate;
+    double m_effectiveRate = 0.0;
+    int m_clickOffset = 0;
     bool m_loaded = false;
     bool m_running = false;
     bool m_armed = false;

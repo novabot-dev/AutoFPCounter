@@ -6,6 +6,7 @@
 #include <string>
 
 #include "../analysis/FrameStats.hpp"
+#include "../analysis/ClickLog.hpp"
 #include "../analysis/InteractionTracker.hpp"
 #include "../analysis/WindowAnalyzer.hpp"
 #include "../playback/PlaybackEngine.hpp"
@@ -100,6 +101,36 @@ public:
     void restartPlayback();
     void setPlaybackSpeed(PlaybackSpeed speed);
 
+    // Applies one of the kSpeedPresets entries. Index 0 (1.0x) maps to
+    // PlaybackSpeed::Normal; every other entry maps to Accelerated with the
+    // preset as its rate. Out-of-range indices are ignored.
+    void setSpeedPreset(int index);
+    [[nodiscard]] int activeSpeedPreset() const noexcept { return m_speedPreset; }
+
+    // Requested and realised playback rate. requestedPlaybackRate() is what the
+    // user picked; realisedPlaybackRate() is measured from ticks actually driven
+    // and is what the UI shows, because the per-frame ceiling means a large
+    // requested rate is not reachable.
+    [[nodiscard]] double requestedPlaybackRate() const noexcept { return m_playback.rate(); }
+    [[nodiscard]] double realisedPlaybackRate() const noexcept { return m_playback.effectiveRate(); }
+
+    // Whole-tick shift applied to injected clicks. See PlaybackEngine::setClickOffset.
+    void setClickOffset(int ticks);
+    [[nodiscard]] int clickOffset() const noexcept { return m_playback.clickOffset(); }
+
+    // -- click log + window overrides -------------------------------------
+    //
+    // The log is per attempt: beginAttempt() clears it. Overrides are applied to
+    // the log's copy of each click and the aggregate tallies are then rebuilt
+    // from it, so the corner counters can never disagree with what the FRAMES
+    // list is showing.
+    [[nodiscard]] ClickLog& clickLog() noexcept { return m_clickLog; }
+    [[nodiscard]] const ClickLog& clickLog() const noexcept { return m_clickLog; }
+
+    void setClickWindowOverride(std::uint64_t sequence, int frames);
+    void clearClickWindowOverride(std::uint64_t sequence);
+    void rebuildStatsFromClicks();
+
     // -- recording --------------------------------------------------------
     // `format` may be MacroFormat::Unknown, in which case the writer is inferred
     // from the file extension.
@@ -164,6 +195,7 @@ private:
     Recorder m_recorder;
     InteractionTracker m_tracker;
     FrameStats m_stats;
+    ClickLog m_clickLog;
     Overlay m_overlay;
 
     std::array<PendingClick, kMaxPendingClicks> m_pending{};
@@ -177,6 +209,11 @@ private:
     // Latched once a playback desync has been surfaced, so the report is shown
     // exactly once per run instead of every frame after the latch trips.
     bool m_desyncReported = false;
+
+    // Index into kSpeedPresets, or -1 when playback speed was set
+    // programmatically rather than chosen from the preset grid. refreshSettings()
+    // seeds it from the mod.json toggle on first run.
+    int m_speedPreset = -1;
 
     std::uint64_t m_tick = 0;
     bool m_attemptActive = false;

@@ -57,6 +57,14 @@ void GameSession::refreshSettings() {
     m_settings.autoStart = settingEnabled("auto-start-playback", true);
 
     m_overlay.setVisible(m_settings.overlay);
+
+    // Seeds the rate from the mod.json toggle, which is the historical default
+    // (accelerated meant a fixed 4x). From here on the preset grid owns it, so
+    // this only runs on settings refresh rather than on every attempt start.
+    if (m_speedPreset < 0) {
+        m_speedPreset = m_settings.accelerated ? 3 : 0;
+        m_playback.setRate(kSpeedPresets[m_speedPreset]);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +129,7 @@ void GameSession::beginAttempt() noexcept {
 
     m_tracker.reset();
     m_stats.reset();
+    m_clickLog.reset();
 
     if (m_settings.recorder) m_recorder.begin();
     else m_recorder.end();
@@ -128,8 +137,11 @@ void GameSession::beginAttempt() noexcept {
     m_playback.restart();
     m_desyncReported = false;
     if (m_playback.isLoaded() && m_settings.autoStart) {
-        m_playback.setSpeed(m_settings.accelerated ? PlaybackSpeed::Accelerated
-                                                  : PlaybackSpeed::Normal);
+        // Re-applied from the live rate rather than from the mod.json toggle: the
+        // preset and the click offset are controls the user drives mid-session,
+        // and a practice-mode retry must not silently discard them.
+        m_playback.setSpeed(m_playback.rate() > 1.0 ? PlaybackSpeed::Accelerated
+                                                    : PlaybackSpeed::Normal);
         m_playback.start();
     } else {
         m_playback.setSpeed(PlaybackSpeed::Off);
@@ -323,6 +335,7 @@ void GameSession::drainPendingClicks(PlayLayer* layer) noexcept {
         const WindowVerdict verdict = WindowAnalyzer::evaluate(click.rawFrames, ctx);
 
         m_stats.record(verdict);
+        m_clickLog.append(ctx, verdict);
 
         if (m_settings.overlay) {
             m_overlay.addMarker(click.worldX, click.worldY, verdict.label.c_str(), verdict.overridden);
@@ -504,6 +517,54 @@ void GameSession::restartPlayback() {
 
 void GameSession::setPlaybackSpeed(PlaybackSpeed speed) {
     m_playback.setSpeed(speed);
+    // A speed set from anywhere other than the preset grid invalidates the
+    // preset selection, so the UI does not keep highlighting a button that no
+    // longer describes what playback is doing.
+    m_speedPreset = -1;
+}
+
+void GameSession::setSpeedPreset(int index) {
+    if (index < 0 || index >= kSpeedPresetCount) return;
+
+    const double rate = kSpeedPresets[index];
+    m_speedPreset = index;
+
+    m_playback.setRate(rate);
+    // 1.0x is the vanilla clock and is expressed as Normal, which is also what
+    // the 60 FPS override keys off: it refuses anything under acceleration
+    // because the driven cadence is not the vanilla one.
+    m_playback.setSpeed(rate > 1.0 ? PlaybackSpeed::Accelerated : PlaybackSpeed::Normal);
+}
+
+void GameSession::setClickOffset(int ticks) {
+    m_playback.setClickOffset(ticks);
+}
+
+// ---------------------------------------------------------------------------
+// Click log + window overrides
+// ---------------------------------------------------------------------------
+
+void GameSession::rebuildStatsFromClicks() {
+    // Recomputed from the log rather than decremented/incremented per override.
+    // The log is bounded at kCapacity entries and this only runs on a UI action,
+    // so a full rebuild is a few thousand integer adds - cheaper than the class of
+    // bug where a decrement is skipped and the tallies drift away from the list.
+    m_stats.reset();
+    for (int ordinal = 0; ordinal < m_clickLog.size(); ++ordinal) {
+        if (const ClickRecord* record = m_clickLog.atOrdinal(ordinal)) {
+            m_stats.record(record->effective);
+        }
+    }
+}
+
+void GameSession::setClickWindowOverride(std::uint64_t sequence, int frames) {
+    if (m_clickLog.setOverride(sequence, frames) == nullptr) return;
+    rebuildStatsFromClicks();
+}
+
+void GameSession::clearClickWindowOverride(std::uint64_t sequence) {
+    if (m_clickLog.clearOverride(sequence) == nullptr) return;
+    rebuildStatsFromClicks();
 }
 
 // ---------------------------------------------------------------------------

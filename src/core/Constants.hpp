@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 
 namespace afpc {
 
@@ -57,15 +58,38 @@ inline constexpr double kMaxRealDt = 0.25;
 // simulated - the engine latches a desync flag instead of silently skipping.
 // ---------------------------------------------------------------------------
 
-// Requested timescale multiplier for accelerated playback. The *effective*
-// multiplier is usually lower than this, because kMaxDrivenTicksPerFrame binds
-// first: at 60 FPS rendering the cap allows 16 * 60 = 960 ticks per real second,
-// i.e. exactly 4x. The multiplier is therefore the intent and the cap is the
-// limit, and the limit always wins.
-inline constexpr double kAcceleratedSpeed = 4.0;
+// Requested timescale multipliers for accelerated playback, offered as presets.
+//
+// The multiplier is the *intent*; kMaxDrivenTicksPerFrame is the limit, and the
+// limit always wins. At 60 FPS rendering the cap allows 16 * 60 = 960 ticks per
+// real second, i.e. exactly 4x the 240 TPS baseline. Every preset above 4 is
+// therefore unreachable in a single rendered frame no matter what is requested,
+// which is why the UI reports the achieved rate next to the requested one rather
+// than showing the requested figure alone.
+inline constexpr double kSpeedPresets[] = {
+    1.0,  2.0,  3.0,  4.0,  6.0,  8.0,  12.0,  16.0,  24.0,
+    32.0, 48.0, 64.0, 73.0, 96.0, 128.0, 150.0, 183.0, 200.0,
+};
+
+inline constexpr int kSpeedPresetCount = static_cast<int>(std::size(kSpeedPresets));
+
+// A 1.0x preset is the vanilla clock and maps to PlaybackSpeed::Normal; every
+// other preset maps to Accelerated with kSpeedPresets[i] as its rate.
+inline constexpr double kNormalRate = 1.0;
 
 // Hard cap on extra engine ticks driven inside one rendered frame.
 inline constexpr int kMaxDrivenTicksPerFrame = 16;
+
+// Largest whole-tick shift the UI will apply to injected clicks. Bounded by the
+// window search radius: shifting further than the tracker searches could not
+// produce a different measured window, so it would be indistinguishable from the
+// clamp.
+inline constexpr int kMaxClickOffsetTicks = 12;
+
+// Smoothing factor for the measured (achieved) playback rate. Low enough that
+// the readout is stable frame to frame, high enough that a genuine speed change
+// shows up within about a second.
+inline constexpr double kRateSmoothingAlpha = 0.1;
 
 // How many ticks the window search will look backwards/forwards from a click.
 inline constexpr int kWindowSearchRadius = 12;
