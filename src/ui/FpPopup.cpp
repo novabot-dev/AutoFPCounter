@@ -109,26 +109,26 @@ bool FpPopup::initAnchored(float width, float height) {
     menu->setID("novabot.autofpcount/menu");
     m_mainLayer->addChildAtPosition(menu, Anchor::Center);
 
-    // A table of {caption, handler} pairs cannot be built here: menu_selector
-    // converts a *member pointer of FpPopup* into a SEL_MenuHandler (a member
-    // pointer of CCObject), which is only a valid implicit conversion at the
-    // point where the handler is named. A local helper keeps that conversion
-    // in scope without naming SEL_MenuHandler, which is not in the public
-    // headers this file includes.
-    auto addButton = [this, menu](const char* caption,
-                                  void (FpPopup::*handler)(CCObject*),
-                                  float x, float y) {
-        auto* item = CCMenuItemSpriteExtra::create(
-            ButtonSprite::create(caption), this, menu_selector(handler));
+    // The helper deliberately takes an already-built menu item rather than a
+    // handler to build one from. menu_selector only accepts a member function
+    // named directly at the call site - handing it a stored pointer-to-member
+    // makes the conversion inside it fail - so the items are constructed here
+    // and the helper only does the positioning.
+    auto addItem = [menu](CCMenuItemSpriteExtra* item, float x, float y) {
         menu->addChild(item);
         item->setPosition(x, y);
     };
 
-    addButton("Previous", &FpPopup::onPrevious, -74.f, 62.f);
-    addButton("Next", &FpPopup::onNext, 74.f, 62.f);
-    addButton("Reload", &FpPopup::onReload, 0.f, 12.f);
-    addButton("Accelerated", &FpPopup::onAccelerated, 0.f, -44.f);
-    addButton("Export", &FpPopup::onExport, 0.f, -100.f);
+    addItem(CCMenuItemSpriteExtra::create(ButtonSprite::create("Previous"),
+                                          this, menu_selector(FpPopup::onPrevious)), -74.f, 62.f);
+    addItem(CCMenuItemSpriteExtra::create(ButtonSprite::create("Next"),
+                                          this, menu_selector(FpPopup::onNext)), 74.f, 62.f);
+    addItem(CCMenuItemSpriteExtra::create(ButtonSprite::create("Reload"),
+                                          this, menu_selector(FpPopup::onReload)), 0.f, 12.f);
+    addItem(CCMenuItemSpriteExtra::create(ButtonSprite::create("Accelerated"),
+                                          this, menu_selector(FpPopup::onAccelerated)), 0.f, -44.f);
+    addItem(CCMenuItemSpriteExtra::create(ButtonSprite::create("Export"),
+                                          this, menu_selector(FpPopup::onExport)), 0.f, -100.f);
 
     refreshStatus();
     return true;
