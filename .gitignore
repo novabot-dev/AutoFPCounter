@@ -27,6 +27,10 @@ macros/
 *.macro
 *.slc
 
+# Python bytecode from the fixture tooling in tools/
+__pycache__/
+*.pyc
+
 # OS noise
 Thumbs.db
 .DS_Store
