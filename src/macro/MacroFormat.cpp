@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "../core/Constants.hpp"
+#include "GdrReader.hpp"
 #include "JsonLite.hpp"
 
 namespace afpc {
@@ -273,6 +274,7 @@ const char* formatName(MacroFormat fmt) noexcept {
         case MacroFormat::MegaHackJson: return "Mega Hack";
         case MacroFormat::Eclipse: return "Eclipse";
         case MacroFormat::PlainText: return "Plain Text";
+        case MacroFormat::Gdr: return "GDR";
         case MacroFormat::Unknown: break;
     }
     return "Unknown";
@@ -370,6 +372,98 @@ MacroParseResult parseAsSilicate(const std::vector<std::uint8_t>& bytes) {
     }
 
     finaliseInputs(data);
+    result.ok = true;
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// GDR (GDevelop replay)
+//
+// Decoding lives in GdrReader.{hpp,cpp}; this is the translation into the
+// importer's own MacroData. Both dialects land here, chosen by content rather
+// than by file extension, and both declare their tick rate explicitly so the
+// 240 FPS gate inspects the file's own claim.
+// ---------------------------------------------------------------------------
+namespace {
+
+MacroError gdrErrorToMacroError(gdr::Error e) noexcept {
+    switch (e) {
+        case gdr::Error::None: return MacroError::None;
+        case gdr::Error::TooManyInputs: return MacroError::TooLarge;
+        case gdr::Error::Truncated:
+        case gdr::Error::BadMagic:
+        case gdr::Error::UnsupportedVersion:
+        case gdr::Error::LengthOverflow:
+        case gdr::Error::MalformedInputs: break;
+    }
+    return MacroError::Malformed;
+}
+
+} // namespace
+
+MacroParseResult parseAsGdr(const std::vector<std::uint8_t>& bytes) {
+    MacroParseResult result;
+    MacroData& data = result.data;
+
+    gdr::Replay replay;
+    gdr::Error err = gdr::Error::None;
+    std::string message;
+
+    if (!gdr::parse(bytes, replay, err, message, kMaxMacroInputs)) {
+        return MacroParseResult::failure(gdrErrorToMacroError(err), std::move(message));
+    }
+
+    data.format = MacroFormat::Gdr;
+    data.frameBased = true;
+    data.declaredFps = replay.framerate;
+
+    // v1 omits `framerate` when it is the default. Leaving this at 0 would make
+    // the gate report FpsMissing, which would be wrong: the file is fine, it
+    // just relies on the format's stated default.
+    if (!std::isfinite(data.declaredFps) || data.declaredFps <= 0.0) {
+        data.declaredFps = replay.version == 1 ? 240.0 : 0.0;
+    }
+
+    if (replay.inputs.size() > kMaxMacroInputs) {
+        return MacroParseResult::failure(MacroError::TooLarge,
+                                         "GDR input count exceeds the safety ceiling");
+    }
+
+    data.inputs.reserve(replay.inputs.size());
+    std::uint32_t maxTick = 0;
+
+    for (const gdr::Input& in : replay.inputs) {
+        MacroInput input;
+        input.tick = static_cast<std::uint32_t>(
+            std::min<std::uint64_t>(in.frame, 0xFFFFFFFFull));
+        input.down = in.down;
+        input.player2 = in.player2;
+        data.inputs.push_back(input);
+        maxTick = std::max(maxTick, input.tick);
+    }
+
+    data.maxTick = maxTick;
+
+    // Non-fatal context for the diagnostics line. GDR carries a 2-player split
+    // positionally and may be platformer mode, both of which affect playback
+    // beyond the frame indices themselves.
+    std::string notes;
+    notes.reserve(96);
+    notes += "GDR v";
+    notes += std::to_string(replay.version);
+    if (!replay.botName.empty()) {
+        notes += " by ";
+        notes += replay.botName;
+    }
+    if (replay.platformer) notes += ", platformer mode";
+    if (replay.ldm) notes += ", low detail mode";
+    if (replay.framerate > 0.0 && std::isfinite(replay.framerate)) {
+        notes += ", declared ";
+        notes += std::to_string(replay.framerate);
+        notes += " TPS";
+    }
+    data.diagnostics = std::move(notes);
+
     result.ok = true;
     return result;
 }
@@ -808,7 +902,15 @@ MacroFormat detectFormat(const std::vector<std::uint8_t>& bytes) {
                                    bytes[lead] == '\n' || bytes[lead] == '\r')) {
         ++lead;
     }
-    if (lead < bytes.size() && bytes[lead] == '{') return MacroFormat::MegaHackJson;
+    // GDR is checked before the JSON dialects: v2 has a three byte binary magic,
+    // and v1 is a JSON document that could otherwise be mistaken for Mega Hack's.
+    if (gdr::looksLikeBinary(bytes)) return MacroFormat::Gdr;
+
+    if (lead < bytes.size() && bytes[lead] == '{') {
+        const std::string_view text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        if (gdr::looksLikeJsonDocument(text)) return MacroFormat::Gdr;
+        return MacroFormat::MegaHackJson;
+    }
 
     if (startsWith(bytes, "fps: ")) return MacroFormat::XBot;
     if (looksLikeSilicateBinary(bytes)) return MacroFormat::Silicate;
@@ -859,11 +961,13 @@ MacroParseResult parseMacroBuffer(std::vector<std::uint8_t> bytes, std::string n
         case MacroFormat::MegaHackJson: result = parseAsMegaHackJson(bytesToString(bytes)); break;
         case MacroFormat::Eclipse: result = parseAsEclipse(bytesToString(bytes)); break;
         case MacroFormat::PlainText: result = parseAsPlainText(bytesToString(bytes)); break;
+        case MacroFormat::Gdr: result = parseAsGdr(bytes); break;
         case MacroFormat::Unknown:
             return MacroParseResult::failure(
                 MacroError::UnknownFormat,
                 "unrecognised layout; expected Silicate binary, XDBot pipe rows, xBot "
-                "'fps:/frames', Mega Hack JSON, or Eclipse comma rows");
+                "'fps:/frames', Mega Hack JSON, Eclipse comma rows, or a GDR replay "
+                "(.gdr / .gdr2)");
     }
 
     if (result.ok) {

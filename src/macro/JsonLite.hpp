@@ -78,6 +78,9 @@ public:
 
 private:
     friend class Parser;
+    // MessagePack is the on-disk form of GDR v1. It decodes into the same tree,
+    // so GDR's two dialects share one extraction path.
+    friend class MsgPackParser;
 
     static const Value& s_null() {
         static const Value null;
@@ -95,5 +98,16 @@ private:
 // Parses `text`. On failure returns a Null value and, if `error` is non-null,
 // writes a short human readable reason.
 [[nodiscard]] Value parse(std::string_view text, std::string* error);
+
+// Decodes a MessagePack document into the same tree `parse` produces. Needed
+// because GDR v1 is serialised with nlohmann's msgpack backend, which is the
+// canonical form even though plain JSON is also accepted.
+//
+// Same guarantees as `parse`: never throws, depth limited to kMaxDepth, and a
+// container count is validated against the remaining bytes before allocating.
+[[nodiscard]] Value parseMsgPack(std::string_view bytes, std::string* error);
+
+// Shared nesting ceiling for both readers.
+inline constexpr int kMaxDepth = 32;
 
 } // namespace afpc::json

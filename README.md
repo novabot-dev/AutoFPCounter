@@ -2,10 +2,11 @@
 
 Frame-window analyser and macro recorder/playback overlay for Geometry Dash 2.2081.
 
-AutoFPCount imports macros recorded by **Silicate**, **XDBot**, **Mega Hack** and
-**Eclipse**, refuses any file whose declared tick rate is not exactly 240 FPS,
-replays the accepted macro, and for every press draws the exact grid position, the
-ticks of slack it had, and the frame-rate ceiling that slack corresponds to.
+AutoFPCount imports macros recorded by **Silicate**, **XDBot**, **Mega Hack**,
+**Eclipse** and **GDR** (`.gdr` / `.gdr2`), refuses any file whose declared tick
+rate is not exactly 240 FPS, replays the accepted macro, and for every press draws
+the exact grid position, the ticks of slack it had, and the frame-rate ceiling that
+slack corresponds to.
 
 ```
 1 frame    -> 240 FPS
@@ -215,14 +216,18 @@ CMakeLists.txt
 mod.json
 about.md
 docs/FORMATS.md              format schemas, research provenance, limitations
+tools/
+  make_gdr_fixtures.py       emits byte-exact .gdr / .gdr2 test vectors
+  check_gdr_reader.py        runs them through a mirror of the C++ reader
 src/
   main.cpp                    all $modify hooks + accelerated driver
   core/
     Constants.hpp             baseline constants and bounds
     Numeric.hpp               fp guards, safeDivide, FixedClock, label formatting
   macro/
-    MacroFormat.hpp/.cpp      sniffing, 5 parsers, 5 writers, the 240 FPS gate
-    JsonLite.hpp/.cpp         depth-limited JSON reader for Mega Hack
+    MacroFormat.hpp/.cpp      sniffing, 6 parsers, 5 writers, the 240 FPS gate
+    GdrReader.hpp/.cpp        GDR v1 (.gdr) and v2 (.gdr2), no dependencies
+    JsonLite.hpp/.cpp         depth-limited JSON + MessagePack readers
   playback/
     PlaybackEngine.hpp/.cpp   forward-only cursor, dual speed, desync latch
     Recorder.hpp/.cpp         native 240 FPS capture + export

@@ -35,7 +35,8 @@ std::size_t g_index = 0;
 
 // Extensions the ingest path can actually decode. A file that does not appear
 // here would only ever be offered and then rejected, so it is never listed.
-constexpr const char* kMacroExtensions[] = {".macro", ".slc", ".json", ".csv", ".txt"};
+constexpr const char* kMacroExtensions[] = {".macro", ".slc", ".json", ".csv", ".txt",
+                                            ".gdr", ".gdr2"};
 
 // Geometry. The popup is tall because the preset grid is eighteen buttons; the
 // layout is fixed constants rather than a layout engine because none of these

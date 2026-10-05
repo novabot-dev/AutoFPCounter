@@ -453,7 +453,7 @@ std::filesystem::path GameSession::autoLoadFromDisk() {
     // be loadable again, and detectFormat() will still identify the format from
     // the file's contents rather than trusting the extension.
     static constexpr const char* kAcceptedExtensions[] = {
-        ".macro", ".json", ".txt", ".slc", ".csv",
+        ".macro", ".json", ".txt", ".slc", ".csv", ".gdr", ".gdr2",
     };
 
     std::vector<std::filesystem::path> candidates;

@@ -22,6 +22,11 @@ enum class MacroFormat : std::uint8_t {
     MegaHackJson,  // json:   { meta:{fps}, events:[{frame,down,p2,...}] }
     Eclipse,       // text:   "<fps>" / "<count>" then "x, y, delay, down"
     PlainText,     // text:   "<fps>" then "frame hold p2"
+    // GDR, the GDevelop replay format. Versioned by a field rather than by the
+    // extension, and the two versions are unrelated encodings:
+    Gdr,           // .gdr  = v1, a serialised JSON document (MessagePack, or
+                   //        plain JSON); .gdr2 = v2, a packed binary stream that
+                   //        begins with the ASCII magic "GDR".
 };
 
 [[nodiscard]] const char* formatName(MacroFormat fmt) noexcept;
@@ -99,6 +104,8 @@ struct MacroParseResult {
 [[nodiscard]] MacroParseResult parseAsMegaHackJson(const std::string& text);
 [[nodiscard]] MacroParseResult parseAsEclipse(const std::string& text);
 [[nodiscard]] MacroParseResult parseAsPlainText(const std::string& text);
+// Both GDR dialects (.gdr v1 and .gdr2 v2), distinguished by content.
+[[nodiscard]] MacroParseResult parseAsGdr(const std::vector<std::uint8_t>& bytes);
 
 [[nodiscard]] MacroFormat detectFormat(const std::vector<std::uint8_t>& bytes);
 

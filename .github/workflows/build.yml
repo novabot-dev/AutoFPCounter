@@ -7,6 +7,31 @@ on:
       - "**"
 
 jobs:
+  macro-tests:
+    name: Macro parser fixtures
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The GDR reader is the one decoder here whose correctness cannot be seen
+      # by inspection: a misread field shifts every subsequent byte and still
+      # "parses". These checks mirror the C++ reader line for line and run it
+      # against byte-exact fixtures plus a real capture published upstream.
+      # The mod build below proves the C++ compiles; this proves it decodes.
+      - name: Generate GDR fixtures
+        run: python tools/make_gdr_fixtures.py /tmp/gdr-fixtures
+
+      - name: Check the GDR reader against them
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/maxnut/GDR-converter/main/test/test.gdr \
+            -o /tmp/real-capture.gdr
+          python tools/check_gdr_reader.py /tmp/gdr-fixtures /tmp/real-capture.gdr
+
   build:
     name: Windows (Win64)
     runs-on: windows-latest

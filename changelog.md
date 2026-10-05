@@ -4,6 +4,26 @@
 
 Initial release.
 
+### GDR import
+
+- `.gdr` (v1) and `.gdr2` (v2) replays now import. Both dialects are decoded by
+  `GdrReader`, written from `maxnut/GDReplayFormat` and deliberately dependency-free
+  — the upstream header pulls in `nlohmann/json` with a MessagePack backend, which
+  AutoFPCount does not otherwise need.
+- v1 is a JSON document (MessagePack canonically, plain JSON accepted); v2 is a
+  packed binary stream. Both declare their tick rate, so the 240 FPS gate applies
+  unchanged and a 60 TPS replay is decoded then rejected with `FpsMismatch` rather
+  than failing to parse.
+- v1's optional `framerate` falls back to the format's stated default of 240 when
+  absent, so an otherwise-valid replay is not reported as rate-less.
+- Platformer-mode input packing (2-bit button) and the positional 2-player split
+  are handled, as are death frames and both extension blocks.
+- **Truncated files are now rejected.** Upstream decodes until end-of-stream and
+  treats the declared input count as advisory, so a file cut mid-record yielded a
+  shorter replay that looked valid. The declared count must now be matched exactly.
+- Verified against byte-exact fixtures for every branch of the format plus a real
+  capture published in `maxnut/GDR-converter`; both run in CI. See `docs/FORMATS.md` §2.7.
+
 ### Pause menu controls
 
 - **FP** button on the pause menu opens the control popup.

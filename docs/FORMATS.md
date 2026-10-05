@@ -13,7 +13,9 @@ The parsers were written against real implementations rather than guesswork:
 |---|---|
 | [`peonii/nat-converter`](https://github.com/peonii/nat-converter) | Silicate, XDBot, xBot 2.1 and Mega Hack replay schemas. Maintained by the Silicate author; this is the reference multi-format converter. |
 | [`matcool/gd-macro-converter`](https://github.com/matcool/gd-macro-converter) | Cross-check on legacy text dialects. |
-| [`knnarf/gdconv`](https://github.com/knnarf/gdconv) | Cross-check on the GDR1 binary replay layout (not imported here). |
+| [`knnarf/gdconv`](https://github.com/knnarf/gdconv) | Cross-check on the GDR1 binary replay layout. |
+| [`maxnut/GDReplayFormat`](https://github.com/maxnut/GDReplayFormat) | GDR v1 and v2 schemas, byte layouts and the input packing. Imported; see §2.7. |
+| [`maxnut/GDR-converter`](https://github.com/maxnut/GDR-converter) | A real published `.gdr` capture, used as a test vector. |
 | [`docs.geode-sdk.org`](https://docs.geode-sdk.org) | `PlayLayer`, `GJBaseGameLayer`, `GJGameState`, `PlayerObject`, `CCDrawNode`, `CCLabelBMFont` field and method signatures for 2.2081. |
 
 Silicate 1.1.0 ships against GD 2.2081 with `"geode": "5.10.1"`, which is where
@@ -129,19 +131,89 @@ line N    <frame> <hold> <player2>
 
 The trailing `<player2>` field is optional.
 
-### 2.7 Format detection
+### 2.7 GDR - the GDevelop replay format
+
+Decoded from [`maxnut/GDReplayFormat`](https://github.com/maxnut/GDReplayFormat) (branch
+`gdr2`), reimplemented in `src/macro/GdrReader.cpp` with no dependency on its
+`nlohmann/json` requirement. Two unrelated encodings share the name; **the version
+is a field, not the extension**:
+
+| Dialect | Extension | Encoding |
+|---|---|---|
+| v1 | `.gdr` | A serialised JSON document. Canonically MessagePack; plain JSON accepted as a fallback. |
+| v2 | `.gdr2` | A hand-packed binary stream beginning with the three ASCII bytes `GDR`. |
+
+#### v1 (`.gdr`) object schema
+
+```
+inputs[]   frame (number), btn (number), "2p" (bool), down (bool)
+framerate  optional number, defaults to 240 when absent
+```
+
+Plus `author`, `description`, `gameVersion`, `duration`, `seed`, `coins`, `ldm`,
+`bot{name,version}` and `level{id,name}`. Note the player-2 key is literally `"2p"`.
+
+#### v2 (`.gdr2`) stream layout
+
+| Field | Encoding |
+|---|---|
+| magic | 3 raw bytes, `"GDR"` |
+| `version`, `gameVersion`, `seed`, `coins`, `bot.version`, `level.id` | varint |
+| `author`, `description`, `bot.name`, `level.name`, `inputTag` | string, length-prefixed |
+| `ldm`, `platformer` | varint bool |
+| `duration` | `f32` **big endian** |
+| `framerate` | `f64` **big endian** |
+| extension block | varint size, then that many opaque bytes |
+| deaths | varint count, then accumulating deltas |
+| inputs | varint count, then varint `p1InputCount`, then records until EOF |
+
+Two details in this table contradict the upstream readme, and the code was taken
+as authoritative in both cases:
+
+- **Strings are length-prefixed, not NUL terminated.** The readme says "null
+  terminated string"; `binarystream.hpp` writes a varint length followed by the bytes.
+- **Input packing is `delta << 3 | button << 1 | down`**, not the bit layout the
+  readme describes. Platformer mode uses that form; classic mode drops the button
+  and uses `delta << 1 | down`.
+
+Fixed-width fields are big endian because `binarystream.hpp` `memcpy`s then reverses
+on a little-endian host. Every integral field, `bool` included, is LEB128 varint.
+
+The 2-player split in v2 is **positional, not per record**: the first
+`p1InputCount` records belong to player 1, and the running frame delta resets to
+zero at that boundary so player 2's frames are relative to its own start.
+
+#### One deliberate divergence
+
+The upstream reader loops until the stream is exhausted and treats the declared
+input count as advisory. AutoFPCount additionally requires the decoded count to
+**equal** the declared count, so a file truncated mid-record is rejected instead of
+decoding into a quietly shorter replay — a macro that silently loses its last few
+clicks is worse than one that fails loudly.
+
+`tools/make_gdr_fixtures.py` emits byte-exact fixtures for every branch above and
+`tools/check_gdr_reader.py` decodes them, plus a real capture published in
+`maxnut/GDR-converter`. Both run in CI on every push.
+
+### 2.8 Format detection
 
 Content sniffing, in order:
 
-1. first non-whitespace byte is `{` → Mega Hack JSON
-2. starts with `fps: ` → xBot 2.1
-3. first 8 bytes decode to a plausible `f64` tick rate **and** bytes 8..11 decode
+1. first three bytes are `"GDR"` → GDR v2
+2. first non-whitespace byte is `{` **and** the head contains `"inputs"`, `"bot"` or
+   `"gameVersion"` → GDR v1; otherwise → Mega Hack JSON
+3. starts with `fps: ` → xBot 2.1
+4. first 8 bytes decode to a plausible `f64` tick rate **and** bytes 8..11 decode
    to a `u32` count that exactly accounts for the remaining payload (±3 bytes of
    padding) → Silicate binary
-4. any row contains `|` → XDBot
-5. any row contains `,` → Eclipse
-6. a three-token row → plain text
-7. otherwise unknown → rejected
+5. any row contains `|` → XDBot
+6. any row contains `,` → Eclipse
+7. a three-token row → plain text
+8. otherwise → GDR v1 attempted as MessagePack, then unknown → rejected
+
+GDR is checked before the JSON dialects because v2 has a binary magic and v1 is a
+JSON document that would otherwise be mistaken for Mega Hack's — the two differ only
+in which keys they use (`inputs` versus `events`).
 
 Every text scalar is parsed with a **full-consumption** check. `strtod` stops at
 the first bad character, which is how `12abc` silently becomes `12` and shifts
