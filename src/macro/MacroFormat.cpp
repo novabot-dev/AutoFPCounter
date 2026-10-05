@@ -1080,6 +1080,13 @@ bool writeMacro(const MacroData& data, MacroFormat fmt, std::vector<std::uint8_t
             }
             break;
         }
+        case MacroFormat::Gdr:
+            // Import-only. GDR v2 is a packed binary container and v1 is
+            // MessagePack, so there is no writer here: the recorder's own exports
+            // already cover every format this mod round-trips, and silently
+            // emitting v1 JSON here would produce a file this mod then has to
+            // sniff back. Callers get a clean failure instead.
+            return false;
         case MacroFormat::MegaHackJson: {
             pushText(buffer, "{\"meta\":{\"fps\":");
             pushText(buffer, formatFpsForHeader(fps));

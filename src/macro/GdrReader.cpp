@@ -186,57 +186,73 @@ bool parseBinary(const std::vector<std::uint8_t>& bytes, Replay& out, Error& err
         return false;
     }
 
+    // Every read below is one clause of the header. `fail` reports the cursor's
+    // own reason plus how far the stream got, which is the only useful thing to
+    // say about a file that stops mid-field. A lambda rather than goto, because
+    // jumping forward over these declarations is a Microsoft extension and
+    // warns once per crossing.
+    const auto fail = [&]() {
+        err = Error::Truncated;
+        message = std::string("GDR v2 stream truncated at offset ") +
+                  std::to_string(cur.pos()) + " (" + cur.error() + ")";
+        return false;
+    };
+
     std::string inputTag;
     float duration = 0.0f;
     double framerate = 0.0;
+    int botVersion = 0;
+    std::uint64_t extensionSize = 0;
+    std::uint64_t deathCount = 0;
+    std::uint64_t inputCount = 0;
+    std::uint64_t p1Inputs = 0;
 
-    if (!cur.varintTo(out.version)) goto truncated;
-    if (!cur.string(inputTag)) goto truncated;
-    if (!cur.string(out.author)) goto truncated;
-    if (!cur.string(out.description)) goto truncated;
-    if (!cur.be32(duration)) goto truncated;
-    if (!cur.varintTo(out.gameVersion)) goto truncated;
-    if (!cur.be64(framerate)) goto truncated;
-    if (!cur.varintTo(out.seed)) goto truncated;
-    if (!cur.varintTo(out.coins)) goto truncated;
-    if (!cur.boolean(out.ldm)) goto truncated;
-    if (!cur.boolean(out.platformer)) goto truncated;
-    if (!cur.string(out.botName)) goto truncated;
-    if (!cur.varintTo(out.botVersion)) goto truncated;
-    if (!cur.varintTo(out.levelId)) goto truncated;
-    if (!cur.string(out.levelName)) goto truncated;
+    if (!cur.varintTo(out.version)) return fail();
+    if (!cur.string(inputTag)) return fail();
+    if (!cur.string(out.author)) return fail();
+    if (!cur.string(out.description)) return fail();
+    if (!cur.be32(duration)) return fail();
+    if (!cur.varintTo(out.gameVersion)) return fail();
+    if (!cur.be64(framerate)) return fail();
+    if (!cur.varintTo(out.seed)) return fail();
+    if (!cur.varintTo(out.coins)) return fail();
+    if (!cur.boolean(out.ldm)) return fail();
+    if (!cur.boolean(out.platformer)) return fail();
+    if (!cur.string(out.botName)) return fail();
+    // An int on the wire, but v1 carries it as a JSON string, so it is stored as
+    // text here rather than as a number.
+    if (!cur.varintTo(botVersion)) return fail();
+    if (!cur.varintTo(out.levelId)) return fail();
+    if (!cur.string(out.levelName)) return fail();
 
+    out.botVersion = std::to_string(botVersion);
     // Duration is informational only; a non-finite value means a corrupt header.
     out.duration = std::isfinite(duration) ? static_cast<double>(duration) : 0.0;
     out.framerate = std::isfinite(framerate) ? framerate : 0.0;
 
-    {
-        std::uint64_t extensionSize = 0;
-        if (!cur.varint(extensionSize)) goto truncated;
-        if (!cur.skip(extensionSize)) goto truncated;
-    }
+    if (!cur.varint(extensionSize)) return fail();
+    if (!cur.skip(extensionSize)) return fail();
 
-    // Deaths are delta encoded and monotonically accumulated.
+    // Deaths are delta encoded and monotonically accumulated. Each costs at least
+    // one byte, so a count beyond the buffer is corruption, not a real document.
+    if (!cur.varint(deathCount)) return fail();
+    if (deathCount > cur.remaining() + 1) {
+        err = Error::LengthOverflow;
+        message = "death count exceeds the remaining buffer";
+        return false;
+    }
+    out.deaths.reserve(static_cast<std::size_t>(std::min<std::uint64_t>(deathCount, 4096)));
     {
-        std::uint64_t deathCount = 0;
-        if (!cur.varint(deathCount)) goto truncated;
-        if (deathCount > cur.remaining() + 1) {
-            err = Error::LengthOverflow;
-            message = "death count exceeds the remaining buffer";
-            return false;
-        }
-        out.deaths.reserve(static_cast<std::size_t>(std::min<std::uint64_t>(deathCount, 4096)));
         std::uint64_t previous = 0;
         for (std::uint64_t i = 0; i < deathCount; ++i) {
             std::uint64_t delta = 0;
-            if (!cur.varint(delta)) goto truncated;
+            if (!cur.varint(delta)) return fail();
             previous += delta;
             out.deaths.push_back(previous);
         }
     }
 
-    std::uint64_t inputCount = 0;
-    if (!cur.varint(inputCount)) goto truncated;
+    if (!cur.varint(inputCount)) return fail();
     if (inputCount > maxInputs) {
         err = Error::TooManyInputs;
         message = "input count " + std::to_string(inputCount) +
@@ -244,8 +260,7 @@ bool parseBinary(const std::vector<std::uint8_t>& bytes, Replay& out, Error& err
         return false;
     }
 
-    std::uint64_t p1Inputs = 0;
-    if (!cur.varint(p1Inputs)) goto truncated;
+    if (!cur.varint(p1Inputs)) return fail();
 
     out.inputs.reserve(static_cast<std::size_t>(std::min<std::uint64_t>(inputCount, 4096)));
 
@@ -257,7 +272,7 @@ bool parseBinary(const std::vector<std::uint8_t>& bytes, Replay& out, Error& err
     // used only as the allocation bound above.
     while (!cur.empty()) {
         std::uint64_t packed = 0;
-        if (!cur.varint(packed)) goto truncated;
+        if (!cur.varint(packed)) return fail();
 
         Input in;
         in.frame = previousFrame + (out.platformer ? (packed >> 3) : (packed >> 1));
@@ -267,8 +282,8 @@ bool parseBinary(const std::vector<std::uint8_t>& bytes, Replay& out, Error& err
 
         if (hasInputExtension) {
             std::uint64_t extSize = 0;
-            if (!cur.varint(extSize)) goto truncated;
-            if (!cur.skip(extSize)) goto truncated;
+            if (!cur.varint(extSize)) return fail();
+            if (!cur.skip(extSize)) return fail();
         }
 
         // Guard against a frame value that would overflow the importer's 32-bit
@@ -314,12 +329,6 @@ bool parseBinary(const std::vector<std::uint8_t>& bytes, Replay& out, Error& err
     }
 
     return true;
-
-truncated:
-    err = Error::Truncated;
-    message = std::string("GDR v2 stream truncated at offset ") +
-              std::to_string(cur.pos()) + " (" + cur.error() + ")";
-    return false;
 }
 
 // ---------------------------------------------------------------------------
