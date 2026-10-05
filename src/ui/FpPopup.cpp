@@ -412,8 +412,17 @@ void FpPopup::onImport(CCObject*) {
             }
             // A nullopt path means the user dismissed the dialog. That is not an
             // error, so it reports nothing at all.
-            if (!result.unwrap().has_value()) return;
-            applyPickedFile(false, std::string(result.unwrap().value()));
+            //
+            // The result is unwrapped once into a local rather than twice: unwrap()
+            // hands back a reference, so calling it per-use is both needlessly
+            // repeated and easy to get wrong.
+            const auto& picked = result.unwrap();
+            if (!picked.has_value()) return;
+
+            // path has no implicit conversion to string - the conversion is
+            // explicit via .string(), because the encoding is a real decision on
+            // Windows rather than a formality.
+            applyPickedFile(false, picked.value().string());
         }
     );
 }
