@@ -21,24 +21,51 @@ namespace afpc {
 
 namespace {
 
-// Row geometry. The popup is deliberately taller than the FP popup that hosts it,
-// because eight legible rows plus an input and a button row does not compress
-// into 300px without the text becoming unreadable.
-constexpr float kPopupWidth = 380.f;
-constexpr float kPopupHeight = 372.f;
+// ---------------------------------------------------------------------------
+// Geometry
+//
+// Bounded by the screen the same way the FP popup is: GD's common win size is
+// 569x320, so *height* is the binding constraint and anything past ~300 runs off
+// the top and bottom. Width is not the constraint. This keeps seven rows rather
+// than the original eight - a row too small to read is worse than one row fewer,
+// since the Previous/Next buttons page through the rest.
+//
+// kPopupHeight is 296, matching the FP popup, so the two are the same size and
+// do not jump when the user moves between them. Half-height is 148.
+//
+// Vertical budget, top to bottom, in half-height units (148 of 148):
+//   +128  header
+//   +106  first row, seven rows at a 20 step -> last row at -14
+//    -46  text input
+//    -84  Previous / Next / Edit / Apply
+//   -118  Reset override
+// Bottom edge of the last band is -118-17 = -135, inside the -148 floor.
+// ---------------------------------------------------------------------------
+constexpr float kPopupWidth = 330.f;
+constexpr float kPopupHeight = 296.f;
 
-constexpr float kHeaderY = 152.f;
-constexpr float kFirstRowY = 124.f;
-constexpr float kRowStep = 24.f;
-constexpr float kInputY = -82.f;
-constexpr float kButtonY = -124.f;
-constexpr float kResetY = -164.f;
+constexpr float kHeaderY = 128.f;
+
+// Seven rows at a 20 step, so the last row sits at 106 - 6*20 = -14, just above
+// the text input at -46. This is the tightest band in the popup: the rows carry
+// the most information in the least space, and 0.4 is what keeps chatFont legible
+// at a 20 step. The count itself lives in the header, which sizes the row pool.
+constexpr float kFirstRowY = 106.f;
+constexpr float kRowStep = 20.f;
+constexpr float kInputY = -46.f;
+constexpr float kButtonY = -84.f;
+constexpr float kResetY = -118.f;
+
+// Four buttons across a 330 popup leaves roughly 78 per button, which is enough
+// for "Previous" at the scale below without the captions touching.
+constexpr float kFourUpX = 118.f;
 
 // Label scale. The rows carry the most information in the smallest space, so
 // they are set a little smaller than the header but stay above the size at which
 // chatFont glyphs stop being readable.
-constexpr float kHeaderScale = 0.5f;
-constexpr float kRowScale = 0.42f;
+constexpr float kHeaderScale = 0.44f;
+constexpr float kRowScale = 0.4f;
+constexpr float kButtonScale = 0.74f;
 
 } // namespace
 
@@ -93,19 +120,34 @@ bool FramesPopup::initAnchored(float width, float height) {
         item->setPosition(x, y);
     };
 
-    addItem(CCMenuItemSpriteExtra::create(ButtonSprite::create("Previous"),
+    // Returns a scaled sprite for a word-caption button. It deliberately does not
+    // take the handler: menu_selector only accepts a member function named
+    // directly at the call site, so a stored pointer-to-member cannot be passed
+    // through it. Callers build the item themselves and name the handler.
+    auto captionSprite = [](const char* caption) {
+        auto* sprite = ButtonSprite::create(caption);
+        sprite->setScale(kButtonScale);
+        return sprite;
+    };
+
+    // Four-up, laid out from the outer column so the pitch is derived rather
+    // than hard-coded: kFourUpX is the centre of the outermost button and the
+    // inner pair sits two thirds of the way in.
+    const float kInnerX = kFourUpX / 3.f;
+
+    addItem(CCMenuItemSpriteExtra::create(captionSprite("Previous"),
                                          this, menu_selector(FramesPopup::onPrevious)),
-            -132.f, kButtonY);
-    addItem(CCMenuItemSpriteExtra::create(ButtonSprite::create("Next"),
+            -kFourUpX, kButtonY);
+    addItem(CCMenuItemSpriteExtra::create(captionSprite("Next"),
                                          this, menu_selector(FramesPopup::onNext)),
-            -44.f, kButtonY);
-    addItem(CCMenuItemSpriteExtra::create(ButtonSprite::create("Edit"),
+            -kInnerX, kButtonY);
+    addItem(CCMenuItemSpriteExtra::create(captionSprite("Edit"),
                                          this, menu_selector(FramesPopup::onEdit)),
-            44.f, kButtonY);
-    addItem(CCMenuItemSpriteExtra::create(ButtonSprite::create("Apply"),
+            kInnerX, kButtonY);
+    addItem(CCMenuItemSpriteExtra::create(captionSprite("Apply"),
                                          this, menu_selector(FramesPopup::onApply)),
-            132.f, kButtonY);
-    addItem(CCMenuItemSpriteExtra::create(ButtonSprite::create("Reset override"),
+            kFourUpX, kButtonY);
+    addItem(CCMenuItemSpriteExtra::create(captionSprite("Reset override"),
                                          this, menu_selector(FramesPopup::onReset)),
             0.f, kResetY);
 

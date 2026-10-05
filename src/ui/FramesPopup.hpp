@@ -57,9 +57,10 @@ protected:
 
     [[nodiscard]] int logSize() const;
 
-    // Eight rows is enough to judge a pattern at a glance while keeping every
-    // label on screen inside the popup at a legible scale.
-    static constexpr int kVisibleRows = 8;
+    // Seven rows is enough to judge a pattern at a glance while keeping every
+    // label inside a 320-tall popup at a legible scale. The value lives here, not
+    // in the .cpp, because it sizes the row pool that this header declares.
+    static constexpr int kVisibleRows = 7;
 
     cocos2d::CCLabelBMFont* m_header = nullptr;
     std::array<cocos2d::CCLabelBMFont*, kVisibleRows> m_rows{};

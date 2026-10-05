@@ -2,10 +2,13 @@
 
 #include <Geode/cocos/label_nodes/CCLabelBMFont.h>
 #include <Geode/ui/Popup.hpp>
+#include <Geode/utils/async.hpp>
+#include <Geode/utils/file.hpp>
 
 #include <array>
 #include <cstddef>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 #include "../core/Constants.hpp"
@@ -54,6 +57,18 @@ protected:
     void onExport(CCObject* sender);
     void onFrames(CCObject* sender);
 
+    // Opens the system file picker and ingests the chosen file. The picked file
+    // is copied into the macros folder first, so it joins the Prev/Next list and
+    // survives a restart rather than living at whatever path it was browsed from.
+    void onImport(CCObject* sender);
+
+    // Opens the macros folder in the system file browser, creating it if needed.
+    void onOpenFolder(CCObject* sender);
+
+    // Runs on the main thread once the picker closes. `pickedPath` is empty when
+    // the dialog was dismissed. Not part of the popup's UI surface.
+    void applyPickedFile(bool failed, std::string pickedPath);
+
     void onOffsetDown(CCObject* sender);
     void onOffsetUp(CCObject* sender);
 
@@ -80,6 +95,22 @@ protected:
 
     std::vector<std::filesystem::path> m_files;
     std::size_t m_index = 0;
+
+    // Holds the in-flight file picker. It is a member rather than a local because
+    // TaskHolder cancels the task when destroyed: if the user closes the popup
+    // while the system dialog is open, the callback must not fire into a
+    // destroyed popup.
+    geode::async::TaskHolder<geode::utils::file::PickResult> m_picker;
+
+    // Set when the user picked something the importer refused. Held separately
+    // from GameSession's diagnostics so the failure survives refreshStatus() and
+    // is not immediately overwritten by the next status line.
+    std::string m_importError;
+
+    // Rebuilds m_files from disk and reselects the entry matching `preferred`,
+    // falling back to the current index. Used after an import so the new file
+    // appears in the list and is the selected one.
+    void rescanMacros(const std::filesystem::path& preferred);
 };
 
 } // namespace afpc
