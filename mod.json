@@ -9,7 +9,7 @@
 	"name": "AutoFPCount",
 	"version": "v1.0.0",
 	"developer": "novabot",
-	"description": "Frame-window analyser and macro recorder/playback overlay for Geometry Dash. Decodes Silicate, XDBot, Mega Hack and Eclipse macro files, enforces a strict 240 TPS ingestion gate, and draws per-click frame-window circles with their equivalent frame-rate ceiling plus a live 'Frame Window: Count' statistics list.",
+	"description": "Frame-window analyser and macro recorder/playback overlay for Geometry Dash. Decodes Silicate, XDBot, Mega Hack, Eclipse and GDR (.gdr/.gdr2) macro files, enforces a strict 240 TPS ingestion gate, and draws per-click frame-window circles with their equivalent frame-rate ceiling plus a live 'Frame Window: Count' statistics list.",
 	"links": {
 		"source": "https://github.com/novabot-dev/AutoFPCount"
 	},
