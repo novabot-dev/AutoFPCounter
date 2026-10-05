@@ -181,13 +181,10 @@ void GameSession::preEngineTick(PlayLayer* layer) {
                          player != nullptr && !player->m_isDead;
     m_playback.setInjectionArmed(armable);
 
-    const std::uint64_t before = m_playback.deliveredInputs();
+    // No click is queued from the delivery itself. PlaybackEngine injects through
+    // layer->handleButton, which lands in onRawButton, so the press is analysed
+    // there exactly once. Queueing here as well would double every macro click.
     m_playback.preTick(layer, m_tick);
-
-    // Whatever playback just injected is a click worth analysing.
-    if (m_playback.deliveredInputs() != before) {
-        queueClick(layer, m_tick, m_playback.speed());
-    }
 }
 
 void GameSession::postEngineTick(PlayLayer* layer) {
@@ -248,14 +245,40 @@ void GameSession::onRawButton(PlayLayer* layer, bool down, int button, bool isPl
     if (layer == nullptr || m_layer != layer || !m_attemptActive) return;
     if (button != kJumpButton) return;
 
-    // Never record a replay as a fresh recording.
-    if (m_playback.isRunning()) return;
+    // Only a button-down is a click. handleButton also fires for the release, and
+    // queueing both would double every count in the log. Macro replays carry
+    // explicit up-events too, so this filter applies to playback identically.
+    if (!down) return;
 
-    if (m_settings.recorder && m_recorder.isRecording()) {
+    // SINGLE SOURCE OF TRUTH FOR CLICK ANALYSIS
+    // -----------------------------------------
+    // Every click, human or injected, is analysed exactly here. preEngineTick
+    // deliberately does NOT queue a click when playback delivers one, even though
+    // it can see the delivery happen.
+    //
+    // That matters because the two paths overlap. PlaybackEngine::deliverOne
+    // injects via layer->handleButton, which routes straight back through this
+    // function - so a macro press arrives here as though a person pressed the key.
+    // Analysing in both places counts every macro click twice.
+    //
+    // The previous code had this inverted in both directions:
+    //   * preEngineTick queued the delivery, AND this function bailed out early on
+    //     `isRunning()`, so live clicks were fine but the bail-out was silently
+    //     cancelling the analysis a macro run depended on.
+    //   * A blanket `if (m_playback.isRunning()) return;` above the queue call is
+    //     what produced "0 clicks" on every macro playback. Playback clicks were
+    //     never analysed by this path at all.
+    // Handling the press here removes both failure modes and lets playback clicks
+    // be analysed by exactly the same code as human ones, with no special cases.
+    queueClick(layer, m_tick, m_playback.speed());
+
+    // The recorder is the one consumer that must NOT see replayed input: recording
+    // a macro that is itself being replayed would append the playback's own clicks
+    // to the take, and a second run would then be twice as long. Only live input
+    // is a recording.
+    if (m_settings.recorder && m_recorder.isRecording() && !m_playback.isRunning()) {
         m_recorder.onButton(down, !isPlayer1);
     }
-
-    queueClick(layer, m_tick, m_playback.speed());
 }
 
 // ---------------------------------------------------------------------------
